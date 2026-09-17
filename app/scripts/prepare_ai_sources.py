@@ -25,6 +25,21 @@ def main():
                 if Path(path).suffix not in ('.py','.yaml','.yml','.txt','.md') and not Path(path).name.startswith('LICENSE'):continue
                 dest=output/name/path;dest.parent.mkdir(parents=True,exist_ok=True)
                 dest.write_bytes(archive.extractfile(entry).read())
+    # Local adapter delta: upstream uses ModelScope only as a TorchModel wrapper and
+    # optional translator. Translation is intentionally absent from this offline app.
+    wrapper=output/'anytext2/ms_wrapper.py'
+    code=wrapper.read_text(encoding='utf-8')
+    old='from modelscope.pipelines import pipeline\nfrom modelscope.utils.constant import Tasks\nfrom modelscope.models.base import TorchModel'
+    replacement='''# Poster Normalizer offline integration: no ModelScope runtime or translator.
+class TorchModel(torch.nn.Module):
+    def __init__(self, model_dir, *args, **kwargs):
+        super().__init__()
+        self.model_dir = model_dir
+'''
+    if old not in code:raise ValueError('Pinned AnyText2 wrapper changed; review adapter delta')
+    code=code.replace(old,replacement).replace("self.use_translator = kwargs.get('use_translator', True)","self.use_translator = False")
+    wrapper.write_text(code,encoding='utf-8')
+    (output/'anytext2/POSTER_ADAPTER_CHANGES.md').write_text('Offline adapter: replaced the ModelScope TorchModel wrapper with a torch.nn.Module storing model_dir; disabled optional translation. All model forward code is upstream. Original LICENSE retained.\n')
     # Explicit OFL font, avoiding unlicensed system fonts from upstream example bundles.
     font=output/'fonts';font.mkdir(exist_ok=True)
     font_manifest=json.loads((ROOT/'config/font_source.json').read_text())

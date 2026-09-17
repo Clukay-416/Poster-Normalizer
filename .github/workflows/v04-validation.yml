@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install packaging pytest
-      - run: python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --python-version 313 --implementation cp --abi cp313 -r offline/requirements-win313.lock -d offline/wheels
+      - run: >-
+          python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --python-version 313 --implementation cp --abi cp313 -r offline/requirements-win313.lock -d offline/wheels
       - name: Python and browser verification
         shell: pwsh
         run: |
