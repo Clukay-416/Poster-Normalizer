@@ -20,7 +20,7 @@ from .paths import APP_ROOT, INSTALL_ROOT, atomic_json, child
 from .store import Conflict
 
 
-def register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config):
+def register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config,choose_profile):
     jobs_root=data/'jobs'
 
     @app.get('/api/models')
@@ -86,7 +86,7 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
             providers=ort.get_available_providers()
         except ImportError:
             providers=[]
-        return {'version':'0.3.0','python':sys.version,'system':platform.platform(),
+        return {'version':'0.3.1','python':sys.version,'system':platform.platform(),
                 'install_root':str(INSTALL_ROOT),'app_root':str(APP_ROOT),'data_root':str(data),
                 'model_root':str(models.root),'onnx_providers':providers,'free_bytes':shutil.disk_usage(data).free,
                 'inference_network':'禁止：模型推理仅使用本地文件','models_separate':not models.root.is_relative_to(APP_ROOT),
@@ -201,17 +201,18 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
             if len(blob)>25*1024*1024:
                 raise ValueError('单图超过 25MB')
             size,notes=normalize_upload(blob,folder,name)
+            profile_key, resolved, orientation = choose_profile(store.setting('profiles',config['profiles']), profile, size)
             store.add({'id':jid,'batch_id':batch,'owner':user['name'],'name':name,'status':'MANUAL',
-                       'width':size[0],'height':size[1],'source_hash':hashlib.sha256(blob).hexdigest(),'profile':profile})
-            return {'id':jid,'name':name,'ok':True,'warnings':notes}
+                       'width':size[0],'height':size[1],'source_hash':hashlib.sha256(blob).hexdigest(),'profile':resolved})
+            return {'id':jid,'name':name,'ok':True,'warnings':notes,'orientation':orientation,'profile_key':profile_key}
         except Exception as exc:
             if folder.exists():shutil.rmtree(folder)
             return {'name':name,'ok':False,'error':str(exc) if isinstance(exc,ValueError) else '图片读取失败'}
 
     def get_profile(key):
         profiles=store.setting('profiles',config['profiles'])
-        if key not in profiles:raise HTTPException(422,'输出规格不存在')
-        return profiles[key]
+        if key != 'auto' and key not in profiles:raise HTTPException(422,'输出规格不存在')
+        return key
 
     def import_zip(blob,profile,user):
         batch=str(uuid.uuid4());results=[];total=0
@@ -303,4 +304,4 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
             return [dict(r) for r in db.execute('SELECT kind,details,created FROM events WHERE job_id=? ORDER BY id DESC LIMIT 100',(jid,))]
 
     from .asset_routes import register_assets
-    register_assets(app,data,store,member,admin,get_job)
+    register_assets(app,data,store,member,admin,get_job,normalize_upload,config,choose_profile)

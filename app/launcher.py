@@ -46,7 +46,7 @@ def main():
         probe.close()
     app = create_app()
     logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(),logging.FileHandler(data/'server.log',encoding='utf-8')])
-    print('\nPoster Normalizer V0.3.0 / Offline application + separate model depot')
+    print('\nPoster Normalizer V0.3.1 / Offline application + separate model depot')
     print(f'Local: http://127.0.0.1:{port}')
     try:
         for ip in sorted({item[4][0] for item in socket.getaddrinfo(socket.gethostname(),None,socket.AF_INET)}):

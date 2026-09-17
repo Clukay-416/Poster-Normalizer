@@ -125,7 +125,7 @@ def create_app(data_path=None, run_worker=True):
         if thread:
             thread.join(timeout=10)
 
-    app = FastAPI(title='海报规范化工作台', version='0.3.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='海报规范化工作台', version='0.3.1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
     app.state.codes = codes
     app.state.jobs_root = jobs_root
@@ -188,7 +188,7 @@ def create_app(data_path=None, run_worker=True):
 
     @app.get('/api/health')
     def health():
-        return {'application':'poster-normalizer','version':'0.3.0','ready':True}
+        return {'application':'poster-normalizer','version':'0.3.1','ready':True}
 
     @app.post('/api/login')
     def login(body: Login, request: Request, response: Response):
@@ -268,6 +268,21 @@ def create_app(data_path=None, run_worker=True):
         (folder/'ingest.json').write_text(json.dumps({'warnings':notes,'source_name':name},ensure_ascii=False),encoding='utf-8')
         return image.size, notes
 
+    def choose_profile(profiles, key, size):
+        """Resolve an explicit profile or select the closest landscape/portrait standard."""
+        if key != 'auto':
+            if key not in profiles:
+                raise ValueError('输出规格不存在')
+            return key, profiles[key], '横版' if profiles[key]['width'] > profiles[key]['height'] else '竖版'
+        source_ratio = size[0] / size[1]
+        landscape = size[0] > size[1]
+        candidates = [(name, profile) for name, profile in profiles.items()
+                      if (profile['width'] > profile['height']) == landscape]
+        if not candidates:
+            candidates = list(profiles.items())
+        name, profile = min(candidates, key=lambda item: abs(item[1]['width'] / item[1]['height'] - source_ratio))
+        return name, profile, '横版' if landscape else '竖版'
+
     @app.get('/api/jobs')
     def list_jobs(limit: int=200, offset: int=0, user=Depends(member)):
         return [public(j) for j in store.list(max(1,min(limit,500)),max(0,offset))]
@@ -275,7 +290,7 @@ def create_app(data_path=None, run_worker=True):
     @app.post('/api/jobs/batch')
     async def upload(files: list[UploadFile]=File(...), profile: str=Form(...), user=Depends(member)):
         ps = store.setting('profiles', config['profiles'])
-        if profile not in ps:
+        if profile != 'auto' and profile not in ps:
             raise HTTPException(422, '输出规格不存在')
         if not 1 <= len(files) <= 100:
             raise HTTPException(422, '每批请上传 1–100 张')
@@ -290,9 +305,10 @@ def create_app(data_path=None, run_worker=True):
                 if len(blob) > 25*1024*1024 or total > 350*1024*1024:
                     raise ValueError('单图限制 25 MB，单批总计限制 350 MB')
                 size, notes = await run_in_threadpool(normalize_upload, blob, folder, name)
+                profile_key, resolved, orientation = choose_profile(ps, profile, size)
                 store.add({'id':jid,'batch_id':batch,'owner':user['name'],'name':name,'status':'MANUAL',
-                           'width':size[0],'height':size[1],'source_hash':hashlib.sha256(blob).hexdigest(),'profile':ps[profile]})
-                result.append({'id':jid,'name':name,'ok':True,'warnings':notes})
+                           'width':size[0],'height':size[1],'source_hash':hashlib.sha256(blob).hexdigest(),'profile':resolved})
+                result.append({'id':jid,'name':name,'ok':True,'warnings':notes,'orientation':orientation,'profile_key':profile_key})
             except Exception as exc:
                 if folder.exists():
                     shutil.rmtree(folder)
@@ -397,6 +413,6 @@ def create_app(data_path=None, run_worker=True):
         return StreamingResponse(chunks(), media_type='application/zip', headers={'Content-Disposition':'attachment; filename="poster-results.zip"'})
 
     from .feature_routes import register_features
-    register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config)
+    register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config,choose_profile)
     app.mount('/', StaticFiles(directory=ROOT/'static', html=True), name='static')
     return app
