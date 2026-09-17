@@ -6,21 +6,21 @@ import zipfile
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[2]
-out=root.parent/'PosterNormalizer_V0.3.2_Windows_Offline.zip'
+out=root.parent/'PosterNormalizer_V0.4.0-dev_Windows_Offline.zip'
 manifest=json.loads((root/'offline/manifest.json').read_text())
 for name,entry in manifest['files'].items():
     path=root/'offline'/name
     assert path.stat().st_size==entry['size'],name
     assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256'],name
 assert (root/'offline/VC_redist.x64.exe').read_bytes()[:2]==b'MZ'
-excluded={'__pycache__','.pytest_cache','.git','.venv','runtime','data','models'}
+excluded={'__pycache__','.pytest_cache','.git','.venv','runtime','runtime-ai','offline-ai','data','models'}
 paths=[]
 for p in sorted(root.rglob('*')):
     rel=p.relative_to(root)
     if not p.is_file() or any(part in excluded for part in rel.parts):continue
     if p.suffix in ('.pyc','.part','.log','.db','.sqlite','.sqlite3','.onnx','.pt','.pth','.safetensors'):continue
     paths.append((p,rel))
-prefix='PosterNormalizer_V0.3.2/'
+prefix='PosterNormalizer_V0.4.0-dev/'
 with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
     for p,rel in paths:
         blob=p.read_bytes()

@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -36,6 +37,8 @@ class Login(BaseModel):
 
 
 class Edit(BaseModel):
+    operation: str = 'repair'
+    base_revision: int = Field(default=0,ge=0)
     revision: int = Field(ge=0)
     repair_mask: str
     extract_mask: str | None = None
@@ -43,6 +46,9 @@ class Edit(BaseModel):
     position: dict | None = None
     engine: str = 'opencv'
     crop: dict | None = None
+    background: dict | None = None
+    protection_mask: str | None = None
+    repair_params: dict | None = None
 
 
 class Revision(BaseModel):
@@ -89,7 +95,13 @@ def create_app(data_path=None, run_worker=True):
                     if state['adobe'] and (state['utilization'] is None or state['utilization']>=20):
                         last_gpu_busy=time.monotonic()
                     skip_lama=time.monotonic()-last_gpu_busy<20
-            job = store.claim(owner,skip_lama)
+            state=snapshot(mode)
+            skip_cuda=mode=='PAUSE_AI' or ai.cuda.process is not None
+            if mode=='ADOBE_PRIORITY':
+                skip_cuda=skip_cuda or bool(state['adobe'])
+            elif mode=='BALANCED':
+                skip_cuda=skip_cuda or (state['available'] and (state['free_mb'] is None or state['free_mb']<10000 or (state['utilization'] or 0)>=80))
+            job = store.claim(owner,skip_lama,skip_cuda)
             if not job:
                 stop.wait(.3)
                 continue
@@ -125,7 +137,7 @@ def create_app(data_path=None, run_worker=True):
         if thread:
             thread.join(timeout=10)
 
-    app = FastAPI(title='海报规范化工作台', version='0.3.2', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='海报规范化工作台', version='0.4.0-dev', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
     app.state.codes = codes
     app.state.jobs_root = jobs_root
@@ -188,7 +200,7 @@ def create_app(data_path=None, run_worker=True):
 
     @app.get('/api/health')
     def health():
-        return {'application':'poster-normalizer','version':'0.3.2','ready':True}
+        return {'application':'poster-normalizer','version':'0.4.0-dev','ready':True}
 
     @app.post('/api/login')
     def login(body: Login, request: Request, response: Response):
@@ -323,19 +335,19 @@ def create_app(data_path=None, run_worker=True):
         return public(get_job(jid))
 
     @app.get('/api/jobs/{jid}/edit')
-    def edit_state(jid: str, user=Depends(member)):
+    def edit_state(jid: str, saved: bool=False, user=Depends(member)):
         job = get_job(jid)
         path = jobs_root/jid/'draft.json'
-        if path.is_file():
+        if not saved and path.is_file():
             draft = json.loads(path.read_text(encoding='utf-8'))
             if draft['revision'] == job['revision']:
-                return draft['edit']
+                return {**draft['edit'], '_draft': True}
         return job['edit'] or {}
 
     @app.post('/api/jobs/{jid}/draft')
     def save_draft(jid: str, body: Edit, user=Depends(member)):
         job = get_job(jid)
-        if job['revision'] != body.revision or job['status'] in ('RUNNING', 'QUEUED'):
+        if job['revision'] != body.revision or job['status'] in ('RUNNING', 'QUEUED', 'TRASHED','TRASH_PENDING','PURGING'):
             raise HTTPException(409, '任务已变化或正在处理，请刷新后保存草稿')
         edit = body.model_dump(exclude={'revision'})
         try:
@@ -344,26 +356,42 @@ def create_app(data_path=None, run_worker=True):
                 get_mask(edit['extract_mask'], (job['width'],job['height']))
             if edit.get('logo'):
                 decode_data(edit['logo'])
-            if edit['engine'] not in ('opencv','lama'):
+            if edit['engine'] not in ('opencv','lama','sdxl','powerpaint'):
                 raise ValueError('修补引擎不合法')
         except Exception as exc:
             raise HTTPException(422, str(exc) if isinstance(exc,ValueError) else '草稿图片无法读取')
         atomic_json(jobs_root/jid/'draft.json', {'revision': body.revision, 'edit': edit})
         return {'ok': True}
 
+    @app.delete('/api/jobs/{jid}/draft')
+    def discard_draft(jid: str, body: Revision, user=Depends(member)):
+        job=get_job(jid)
+        if job['revision'] != body.revision:
+            raise Conflict('任务版本已变化，请刷新')
+        (jobs_root/jid/'draft.json').unlink(missing_ok=True)
+        return {'ok':True}
+
     @app.post('/api/jobs/{jid}/submit')
     def submit(jid: str, body: Edit, user=Depends(member)):
         job = get_job(jid)
         edit = body.model_dump(exclude={'revision'})
         try:
-            if edit['engine'] not in ('opencv','lama'):
+            if edit['engine'] not in ('opencv','lama','sdxl','powerpaint'):
                 raise ValueError('修补引擎不合法')
-            if edit['engine']=='lama':
-                models.require('lama_onnx')
+            if edit['operation']=='repair' and edit['engine']!='opencv':
+                models.require({'lama':'lama_onnx','sdxl':'sdxl_inpaint','powerpaint':'powerpaint_v2'}[edit['engine']])
             crop=edit.get('crop')
             if crop and (set(crop)!={'x','y','width','height'} or any(type(v) is not int for v in crop.values())):
                 raise ValueError('裁切参数不合法')
-            validate_edit(edit, (job['width'],job['height']))
+            if edit['operation']=='compose':
+                from .geometry import validate_geometry
+                validate_geometry(edit,(job['width'],job['height']))
+                if edit['base_revision'] not in (0,job['revision']):raise ValueError('只能基于当前结果调整构图')
+                if edit['base_revision'] and not (jobs_root/jid/f"r{edit['base_revision']}/base.png").is_file():raise ValueError('当前版本尚无底图')
+                edit['engine']='opencv'  # Composition does not acquire GPU resources.
+            elif edit['operation']=='repair':
+                validate_edit(edit, (job['width'],job['height']))
+            else:raise ValueError('未知编辑操作')
             pos = edit.get('position')
             if pos and (set(pos) != {'x','y','width'} or any(type(v) is not int or v<0 or v>8192 for v in pos.values())):
                 raise ValueError('位置必须是合法整数像素')
@@ -394,7 +422,7 @@ def create_app(data_path=None, run_worker=True):
         job = get_job(jid)
         if name == 'normalized.png':
             path = jobs_root/jid/name
-        elif name in ('final.png','base.png','logo.png','repair_mask.png','extract_mask.png','qc.json'):
+        elif name in ('final.png','base.png','logo.png','repair_mask.png','extract_mask.png','qc.json') or re.fullmatch(r'(final|base)-[0-3]\.png',name):
             rev = job['revision'] if revision is None else revision
             if rev < 1 or rev > job['revision']:
                 raise HTTPException(404)
@@ -404,6 +432,32 @@ def create_app(data_path=None, run_worker=True):
         if not path.is_file():
             raise HTTPException(404,'该版本产物还未生成')
         return FileResponse(path)
+
+    @app.post('/api/jobs/{jid}/candidate')
+    def select_candidate(jid:str,body:dict,user=Depends(member)):
+        job=get_job(jid);rev=body.get('revision');index=body.get('index')
+        if type(rev) is not int or type(index) is not int or not 0<=index<4:
+            raise HTTPException(422,'候选参数不合法')
+        old=jobs_root/jid/f'r{rev}'
+        if job['revision']!=rev or job['status']!='REVIEW':raise Conflict('只能选择当前待复核版本的候选')
+        if not (old/f'base-{index}.png').is_file():raise HTTPException(404,'候选不存在')
+        with store.connect() as db:
+            changed=db.execute("UPDATE jobs SET revision=revision+1,status='RUNNING',updated=? WHERE id=? AND revision=? AND status='REVIEW'",(time.time(),jid,rev)).rowcount
+            if not changed:raise Conflict('版本已变化，请刷新')
+        temp=jobs_root/jid/f'.r{rev+1}.candidate-{uuid.uuid4().hex}'
+        try:
+            shutil.copytree(old,temp)
+            shutil.copyfile(old/f'base-{index}.png',temp/'base.png')
+            shutil.copyfile(old/f'final-{index}.png',temp/'final.png')
+            qc=json.loads((temp/'qc.json').read_text(encoding='utf-8'))
+            qc.update(revision=rev+1,selected_candidate=index,parent_revision=rev)
+            atomic_json(temp/'qc.json',qc)
+            temp.rename(jobs_root/jid/f'r{rev+1}')
+            store.finish(jid,rev+1,'REVIEW')
+        except Exception:
+            store.finish(jid,rev+1,'FAILED','选择候选失败，原版本已保留')
+            raise
+        return public(get_job(jid))
 
     @app.get('/api/export')
     def export(batch_id: str | None=None, user=Depends(member)):
@@ -438,6 +492,8 @@ def create_app(data_path=None, run_worker=True):
         return StreamingResponse(chunks(), media_type='application/zip', headers={'Content-Disposition':'attachment; filename="poster-results.zip"'})
 
     from .title_routes import register_titles
+    from .ai_routes import register_ai
+    register_ai(app,store,ai,member,admin,get_job,jobs_root)
     register_titles(app, data, member, get_job)
     from .feature_routes import register_features
     register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config,choose_profile)

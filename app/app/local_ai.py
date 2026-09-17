@@ -7,7 +7,9 @@ import numpy as np
 
 class LocalAI:
     def __init__(self, center):
+        from .ai_runtime import CudaRuntime
         self.center = center
+        self.cuda = CudaRuntime(center)
         self.lock = threading.RLock()
         self.sessions = {}
 
@@ -79,8 +81,10 @@ class LocalAI:
             # The selected exporter uses 512x512 tensors; validate instead of silently guessing.
             dims = next(i.shape for i in inputs if i.name=='image')
             nh,nw=(int(dims[2]),int(dims[3])) if isinstance(dims[2],int) and isinstance(dims[3],int) else (512,512)
-            small=cv2.resize(rgb,(nw,nh)).astype('float32')/255
-            binary=cv2.resize(mask,(nw,nh),interpolation=cv2.INTER_NEAREST)
+            ratio=min(nw/rgb.shape[1],nh/rgb.shape[0])
+            rw,rh=max(1,round(rgb.shape[1]*ratio)),max(1,round(rgb.shape[0]*ratio))
+            small=cv2.copyMakeBorder(cv2.resize(rgb,(rw,rh)),0,nh-rh,0,nw-rw,cv2.BORDER_REFLECT_101).astype('float32')/255
+            binary=cv2.copyMakeBorder(cv2.resize(mask,(rw,rh),interpolation=cv2.INTER_NEAREST),0,nh-rh,0,nw-rw,cv2.BORDER_CONSTANT,value=0)
             output=session.run(None,{'image':small.transpose(2,0,1)[None],
                                      'mask':(binary>0).astype('float32')[None,None]})[0]
             if output.ndim!=4 or output.shape[1]!=3 or not np.isfinite(output).all():
@@ -88,4 +92,4 @@ class LocalAI:
             result=output[0].transpose(1,2,0)
             # This adapter is specific to the selected Carve fp32 graph, not arbitrary LaMa exports.
             result=np.clip(result,0,255).astype('uint8')
-            return cv2.resize(result,(rgb.shape[1],rgb.shape[0]),interpolation=cv2.INTER_CUBIC)
+            return cv2.resize(result[:rh,:rw],(rgb.shape[1],rgb.shape[0]),interpolation=cv2.INTER_CUBIC)

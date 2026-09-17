@@ -7,6 +7,10 @@ data/
 models/
 offline/*
 !offline/requirements-win313.lock
+!offline/ai-*.in
+offline-ai/
+runtime-ai/
+app/ai_vendor/
 *.zip
 *.exe
 *.whl

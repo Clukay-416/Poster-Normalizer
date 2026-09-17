@@ -1,0 +1,12 @@
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+numpy==1.26.4
+pillow==11.3.0
+diffusers==0.27.0
+transformers==4.28.0
+huggingface-hub==0.25.2
+accelerate==0.28.0
+safetensors==0.4.5
+opencv-python-headless==4.10.0.84
+mmengine==0.10.7
+pip==25.3

@@ -56,7 +56,7 @@ class ModelCenter:
 
     def _validate_root(self, root):
         root = root.resolve()
-        protected = [APP_ROOT.resolve(), self.data.resolve(), (INSTALL_ROOT/'runtime').resolve()]
+        protected = [APP_ROOT.resolve(), self.data.resolve(), (INSTALL_ROOT/'runtime').resolve(), (INSTALL_ROOT/'runtime-ai').resolve()]
         if root == Path(root.anchor) or root == INSTALL_ROOT or any(root.is_relative_to(p) or p.is_relative_to(root) for p in protected):
             raise ValueError('模型目录必须独立于应用、任务数据和运行环境，不能选择盘符根目录')
         if os.name == 'nt' and any(p.lower() in ('windows','program files','program files (x86)') for p in root.parts):
@@ -102,6 +102,9 @@ class ModelCenter:
 
     def plan(self, mid, resolve=False):
         model = self.catalog[mid]
+        locked=APP_ROOT/'config/model_locks'/f'{mid}.json'
+        if locked.is_file():
+            return self._check_plan(json.loads(locked.read_text(encoding='utf-8')))
         if model.get('files'):
             return {'model_id':mid,'source':model['source_page'],'files':model['files']}
         cached = self.root/mid/'download_plan.json'
@@ -137,6 +140,8 @@ class ModelCenter:
                 if item.get('Type') != 'blob':
                     continue
                 name = item['Path']
+                if resolver.get('patterns') and not any(fnmatch.fnmatch(name,p) for p in resolver['patterns']):
+                    continue
                 # Inference assets only, never remote Python/pickle code imports.
                 if not name.lower().endswith(('.ckpt','.safetensors','.pth','.pt','.bin','.json','.txt','.yaml','.yml','.onnx','.ttf','.md')):
                     continue
@@ -321,7 +326,12 @@ class ModelCenter:
                     (str(child(self.root/mid,f['path'])),child(self.root/mid,f['path']).stat().st_size,
                      child(self.root/mid,f['path']).stat().st_mtime_ns,f.get('sha256') or f.get('git_sha1')) for f in plan['files']):
                     state['status']='VERIFIED'
+            profile=model.get('runtime_profile')
+            runtime=(INSTALL_ROOT/'runtime-ai'/profile/'python.exe').is_file() if profile else True
+            tested=self.store.setting('model_test_'+mid,{})
+            ready=bool(model.get('adapter')) and mid in enabled and state.get('status')=='VERIFIED' and runtime
             models.append({**model,'files':plan['files'],'state':state,'enabled':mid in enabled,
+                           'runtime_installed':runtime,'self_test':tested,
                            'can_download':bool(model.get('files') or model.get('resolver')),
-                           'runtime_ready':bool(model.get('adapter')) and mid in enabled and state.get('status')=='VERIFIED'})
+                           'runtime_ready':ready})
         return {'root':str(self.root),'models':models,'free_bytes':shutil.disk_usage(self.root).free}

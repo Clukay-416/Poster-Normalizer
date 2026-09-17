@@ -1,0 +1,12 @@
+{
+  "model_id": "lama_onnx",
+  "source": "https://huggingface.co/Carve/LaMa-ONNX",
+  "files": [
+    {
+      "path": "lama_fp32.onnx",
+      "url": "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx",
+      "size": 208044816,
+      "sha256": "1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6"
+    }
+  ]
+}

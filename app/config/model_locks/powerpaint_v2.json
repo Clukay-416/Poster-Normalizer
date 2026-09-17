@@ -1,0 +1,115 @@
+{
+  "model_id": "powerpaint_v2",
+  "repo": "JunhaoZhuang/PowerPaint-v2-1",
+  "revision": "5ae2be3ac38b162df209b7ad5de036d339081e33",
+  "files": [
+    {
+      "path": "PowerPaint_Brushnet/diffusion_pytorch_model.safetensors",
+      "size": 3544366408,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/PowerPaint_Brushnet/diffusion_pytorch_model.safetensors",
+      "sha256": "530f2886ef5bcdf199269ec344155a517639ba64219b85eeb23fd86aab93147f"
+    },
+    {
+      "path": "PowerPaint_Brushnet/pytorch_model.bin",
+      "size": 492401329,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/PowerPaint_Brushnet/pytorch_model.bin",
+      "sha256": "73709b4360ca06ef990a67d090e8d81a4310943d67a88845653fc4e9f7f26b65"
+    },
+    {
+      "path": "README.md",
+      "size": 4432,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/README.md",
+      "git_sha1": "15911a13e5fad6c3e45c6718eb5fa017b35e0498"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/feature_extractor/preprocessor_config.json",
+      "size": 468,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/feature_extractor/preprocessor_config.json",
+      "git_sha1": "36598b309c6f7a665f53b7cfff7fb7d69fecc43a"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/model_index.json",
+      "size": 629,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/model_index.json",
+      "git_sha1": "ea66866a6cdde6b933fc7238c54e300141ef2139"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/safety_checker/config.json",
+      "size": 692,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/safety_checker/config.json",
+      "git_sha1": "bcafc4c18190d6cafc027c27e4e2a251d0f83dec"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/safety_checker/pytorch_model.bin",
+      "size": 1216059369,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/safety_checker/pytorch_model.bin",
+      "sha256": "afa7ebf10b23008ecbb81111e9cc8818443e1302a0defaa0a6cbd8cfe310b278"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/scheduler/scheduler_config.json",
+      "size": 379,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/scheduler/scheduler_config.json",
+      "git_sha1": "3031caef0b2f1dff32883ca1dba8eca0f1261732"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/text_encoder/config.json",
+      "size": 560,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/text_encoder/config.json",
+      "git_sha1": "a60dbd23c7e0b2b56ef736342778efb490acb255"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/text_encoder/pytorch_model.bin",
+      "size": 492304313,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/text_encoder/pytorch_model.bin",
+      "sha256": "ccf6d26500a883b3e7227d2f10292bee7fe078f26cb1afef46eee26252805f0b"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/tokenizer/merges.txt",
+      "size": 524619,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/tokenizer/merges.txt",
+      "git_sha1": "76e821f1b6f0a9709293c3b6b51ed90980b3166b"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/tokenizer/special_tokens_map.json",
+      "size": 588,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/tokenizer/special_tokens_map.json",
+      "git_sha1": "cf0682d6de72c1547f41b4f6d7c59f62deffef94"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/tokenizer/tokenizer_config.json",
+      "size": 705,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/tokenizer/tokenizer_config.json",
+      "git_sha1": "180a4e1be2a7d0b38a44108d6f24f585f35147b1"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/tokenizer/vocab.json",
+      "size": 1059962,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/tokenizer/vocab.json",
+      "git_sha1": "469be27c5c010538f845f518c4f5e8574c78f7c8"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/unet/config.json",
+      "size": 1784,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/unet/config.json",
+      "git_sha1": "4ecf0daa6a492a6e46c9ec3707ecdc456e6fb740"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/unet/diffusion_pytorch_model.bin",
+      "size": 3438354725,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/unet/diffusion_pytorch_model.bin",
+      "sha256": "c8dac118ff5749ca65298f1546ec23d3fec876cded41f9559fcd863e30d969f4"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/vae/config.json",
+      "size": 606,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/vae/config.json",
+      "git_sha1": "a42b5d9bb56e57b7c6959d84140e3a7898f3d61c"
+    },
+    {
+      "path": "realisticVisionV60B1_v51VAE/vae/diffusion_pytorch_model.bin",
+      "size": 334707473,
+      "url": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1/resolve/5ae2be3ac38b162df209b7ad5de036d339081e33/realisticVisionV60B1_v51VAE/vae/diffusion_pytorch_model.bin",
+      "sha256": "9428a7d3cab924439bbba9f2c3e5128d466f9dffd9c12ed7098ae288a5bfe8bd"
+    }
+  ]
+}

@@ -29,6 +29,7 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
         if user['role']!='admin':
             result['root']='请管理员查看或修改模型目录'
         result['compute_device']=store.setting('compute_device','CPU')
+        result['runtimes']=ai.cuda.inventory()
         return result
 
     @app.put('/api/models/root')
@@ -86,14 +87,14 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
             providers=ort.get_available_providers()
         except ImportError:
             providers=[]
-        return {'version':'0.3.2','python':sys.version,'system':platform.platform(),
+        return {'version':'0.4.0-dev','python':sys.version,'system':platform.platform(),
                 'install_root':str(INSTALL_ROOT),'app_root':str(APP_ROOT),'data_root':str(data),
                 'model_root':str(models.root),'onnx_providers':providers,'free_bytes':shutil.disk_usage(data).free,
                 'inference_network':'禁止：模型推理仅使用本地文件','models_separate':not models.root.is_relative_to(APP_ROOT),
                 'gpu_note':'DirectML 需目标机器自检；当前环境未完成 4090/Adobe 共存验收'}
 
     @app.post('/api/models/{mid}/self-test')
-    def self_test(mid:str,user=Depends(admin)):
+    def self_test(mid:str,body:dict,user=Depends(admin)):
         started=time.monotonic()
         try:
             image=np.full((128,128,3),128,dtype='uint8')
@@ -105,11 +106,28 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
                 mask=np.zeros((128,128),dtype='uint8');mask[50:70,50:70]=255
                 output=ai.inpaint(image,mask)
                 result={'shape':list(output.shape),'mean':float(output.mean()),'finite':bool(np.isfinite(output).all())}
+            elif mid in ('sdxl_inpaint','powerpaint_v2','sam2_1_small','grounding_dino','anytext2'):
+                if mid in ('sdxl_inpaint','powerpaint_v2','anytext2') and body.get('confirm_generation') is not True:
+                    raise ValueError('生成模型自检需要手动确认，将处理合成测试画布')
+                image=np.full((512,512,3),128,dtype='uint8')
+                image[180:330,180:330]=220
+                mask=np.zeros((512,512),dtype='uint8');mask[200:300,160:352]=255
+                params={'candidates':1,'steps':10,'resolution':512,'seed':0}
+                if mid=='sam2_1_small':params={'points':[{'x':250,'y':250,'label':1}]}
+                if mid=='anytext2':params.update(text='TEST',prompt='clear lettering on plain background')
+                response=ai.cuda.run(mid,'self-test',image,mask,params)
+                arrays=response.pop('outputs')
+                result={'output_shapes':[list(a.shape) for a in arrays],
+                        'finite':all(bool(np.isfinite(a).all()) for a in arrays),
+                        'detected_boxes':len(response.get('boxes',[]))}
             else:
                 raise ValueError('此模型尚未实现推理适配器')
         except Exception as exc:
             raise HTTPException(422,str(exc) if isinstance(exc,ValueError) else type(exc).__name__+'：推理失败，请查看环境与模型兼容性')
-        return {'ok':True,'duration_ms':round((time.monotonic()-started)*1000),'result':result,
+        receipt={'ok':True,'time':time.time(),'duration_ms':round((time.monotonic()-started)*1000),'result':result,
+                 'model_root':str(models.root)}
+        store.set_setting('model_test_'+mid,receipt)
+        return {**receipt,
                 'note':'自检只确认加载与基本推理，不能代替真实海报质量验收'}
 
     @app.get('/api/task-center')
@@ -147,8 +165,24 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
                     if not path.exists() or not json.loads(path.read_text(encoding='utf-8'))['hard_pass']:
                         raise ValueError('当前版本没有通过硬性检查')
                     store.approve(jid,revision)
-                elif action in ('pause','resume','cancel'):
+                elif action in ('pause','resume','cancel','trash','restore'):
                     store.action(jid,revision,action)
+                elif action=='purge':
+                    if user['role']!='admin':
+                        raise HTTPException(403,'永久删除需要管理员权限')
+                    folder=jobs_root/jid
+                    if folder.is_symlink() or folder.resolve().parent!=jobs_root.resolve():
+                        raise ValueError('任务路径校验失败')
+                    store.action(jid,revision,'purge')
+                    try:
+                        if folder.exists():
+                            shutil.rmtree(folder)
+                        with store.connect() as db:
+                            db.execute("DELETE FROM jobs WHERE id=? AND status='PURGING'",(jid,))
+                    except OSError:
+                        with store.connect() as db:
+                            db.execute("UPDATE jobs SET status='TRASHED' WHERE id=? AND status='PURGING'",(jid,))
+                        raise ValueError('文件被占用，删除未完成；请关闭文件后重试')
                 elif action=='label':
                     project=str(body.get('project',''))[:100];priority=body.get('priority',0)
                     if type(priority) is not int or priority not in (0,1,2,3):
@@ -165,11 +199,11 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
     @app.post('/api/auto-batch')
     def automatic(body:dict,user=Depends(member)):
         engine=body.get('engine','opencv')
-        if engine not in ('opencv','lama'):
+        if engine not in ('opencv','lama','sdxl','powerpaint'):
             raise HTTPException(422,'未知修补引擎')
         try:
             models.require('ocr_det_v5')
-            if engine=='lama':models.require('lama_onnx')
+            if engine!='opencv':models.require({'lama':'lama_onnx','sdxl':'sdxl_inpaint','powerpaint':'powerpaint_v2'}[engine])
         except ValueError as exc:
             raise HTTPException(422,str(exc))
         items=body.get('items',[])

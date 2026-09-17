@@ -1,0 +1,19 @@
+{
+  "model_id": "sam2_1_small",
+  "repo": "facebook/sam2.1-hiera-small",
+  "revision": "ee5bba1d82bb8749febdf90f45e84b687142ba03",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 19974,
+      "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/README.md",
+      "git_sha1": "019892ac48815055916e1fffc556adb0f220c9f6"
+    },
+    {
+      "path": "sam2.1_hiera_small.pt",
+      "size": 184416285,
+      "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/sam2.1_hiera_small.pt",
+      "sha256": "6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38"
+    }
+  ]
+}

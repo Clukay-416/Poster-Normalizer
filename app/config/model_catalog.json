@@ -8,7 +8,14 @@
       "adapter": "ocr_det_onnx",
       "license": "RapidOCR 转换版，上游 PaddleOCR；来源与许可文件需按用途审阅",
       "source_page": "https://github.com/RapidAI/RapidOCR",
-      "files": [{"path": "det.onnx", "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx", "size": 4819576, "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"}]
+      "files": [
+        {
+          "path": "det.onnx",
+          "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx",
+          "size": 4819576,
+          "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"
+        }
+      ]
     },
     {
       "id": "lama_onnx",
@@ -17,43 +24,112 @@
       "adapter": "lama_onnx",
       "license": "Carve 社区转换；原 LaMa 权重许可需另核查，默认未启用",
       "source_page": "https://huggingface.co/Carve/LaMa-ONNX",
-      "files": [{"path": "lama_fp32.onnx", "url": "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx", "size": 208044816, "sha256": "1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6"}]
+      "files": [
+        {
+          "path": "lama_fp32.onnx",
+          "url": "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx",
+          "size": 208044816,
+          "sha256": "1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6"
+        }
+      ]
     },
     {
       "id": "sam2_1_small",
-      "name": "SAM 2.1 small · 精细分割（储备）",
-      "purpose": "可下载储备权重；本包尚未实现 SAM 推理，不会显示为可用模型",
-      "adapter": null,
+      "name": "SAM 2.1 small · 交互分割",
+      "purpose": "正负提示点和选框分割；需要 modern 运行包及本机自检",
+      "adapter": "cuda_sam2",
       "license": "Meta SAM2：代码与 checkpoint Apache-2.0；保留上游说明",
       "source_page": "https://github.com/facebookresearch/sam2",
-      "resolver": {"type": "hf", "repo": "facebook/sam2.1-hiera-small", "patterns": ["*.pt", "README.md", "LICENSE*"]}
+      "resolver": {
+        "type": "hf",
+        "repo": "facebook/sam2.1-hiera-small",
+        "patterns": [
+          "*.pt",
+          "README.md",
+          "LICENSE*"
+        ]
+      },
+      "runtime_profile": "modern"
     },
     {
       "id": "grounding_dino",
-      "name": "GroundingDINO tiny · 语义检测（储备）",
-      "purpose": "可下载 Transformers 格式的完整推理资产；本包尚未实现其推理适配",
-      "adapter": null,
+      "name": "GroundingDINO tiny · 人物保护检测",
+      "purpose": "检测人物与脸部保护框，可手动修正；需要 modern 运行包",
+      "adapter": "cuda_grounding_dino",
       "license": "上游代码许可不替代每项权重许可，请检查仓库模型卡",
       "source_page": "https://huggingface.co/IDEA-Research/grounding-dino-tiny",
-      "resolver": {"type": "hf", "repo": "IDEA-Research/grounding-dino-tiny", "patterns": ["*.safetensors", "*.json", "*.txt", "README.md", "LICENSE*"]}
+      "resolver": {
+        "type": "hf",
+        "repo": "IDEA-Research/grounding-dino-tiny",
+        "patterns": [
+          "*.safetensors",
+          "*.json",
+          "*.txt",
+          "README.md",
+          "LICENSE*"
+        ]
+      },
+      "runtime_profile": "modern"
     },
     {
       "id": "anytext2",
-      "name": "AnyText2 · 标题重建（储备）",
-      "purpose": "通过官方 ModelScope 仓库准备模型资产；本包未接入生成适配，不执行标题生成",
-      "adapter": null,
+      "name": "AnyText2 · 标题重建",
+      "purpose": "手动确认后生成标题候选；中文标题/英文风格提示，不启用翻译模型；需 anytext 运行包",
+      "adapter": "cuda_anytext2",
       "license": "核对官方仓库与所含基础模型各自许可；下载不表示获准商用",
       "source_page": "https://github.com/tyxsspa/AnyText2",
-      "resolver": {"type": "modelscope", "repo": "iic/cv_anytext2"}
+      "resolver": {
+        "type": "modelscope",
+        "repo": "iic/cv_anytext2",
+        "patterns": [
+          "anytext_v2.0.ckpt",
+          "clip-vit-large-patch14/*",
+          "configuration.json",
+          "README.md"
+        ]
+      },
+      "runtime_profile": "anytext"
     },
     {
-      "id": "brushnetx",
-      "name": "BrushNetX · 困难修补（待锁定）",
-      "purpose": "基础 SD 模型与依赖版本尚未锁定，避免下载不兼容的巨型组合；本版不提供一键下载或推理",
-      "adapter": null,
-      "license": "需同时核查 BrushNet 与基础 SD 模型许可",
-      "source_page": "https://github.com/TencentARC/BrushNet",
-      "files": []
+      "id": "sdxl_inpaint",
+      "name": "SDXL Inpainting · 大面积背景重绘",
+      "purpose": "本地扩散修补，天空/云层等复杂区域；需要 modern 运行包",
+      "adapter": "cuda_sdxl",
+      "runtime_profile": "modern",
+      "license": "CreativeML Open RAIL++-M，请查看模型卡与使用限制",
+      "source_page": "https://huggingface.co/diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+      "resolver": {
+        "type": "hf",
+        "repo": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+        "patterns": [
+          "*.json",
+          "*.txt",
+          "*.fp16.safetensors",
+          "README.md",
+          "LICENSE*"
+        ]
+      }
+    },
+    {
+      "id": "powerpaint_v2",
+      "name": "PowerPaint V2 · 文字与物体移除",
+      "purpose": "BrushNet 版 PowerPaint V2-1，含所需基础模型；需要 powerpaint 运行包",
+      "adapter": "cuda_powerpaint",
+      "runtime_profile": "powerpaint",
+      "license": "PowerPaint 代码 MIT；基础模型与权重许可分别见模型卡",
+      "source_page": "https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1",
+      "resolver": {
+        "type": "hf",
+        "repo": "JunhaoZhuang/PowerPaint-v2-1",
+        "patterns": [
+          "*.safetensors",
+          "*.bin",
+          "*.json",
+          "*.txt",
+          "README.md",
+          "LICENSE*"
+        ]
+      }
     }
   ]
 }

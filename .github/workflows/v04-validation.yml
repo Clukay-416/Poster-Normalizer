@@ -1,0 +1,66 @@
+name: V0.4 complete package validation
+on:
+  push:
+    branches: [v0.4-development]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install packaging pytest
+      - run: python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --python-version 313 --implementation cp --abi cp313 -r offline/requirements-win313.lock -d offline/wheels
+      - name: Python and browser verification
+        shell: pwsh
+        run: |
+          python -m pip install --no-index --find-links offline/wheels -r offline/requirements-win313.lock
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location app
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem static/*.js | ForEach-Object { node --check $_.FullName; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
+          Pop-Location
+          npm install --prefix "$env:RUNNER_TEMP/poster-browser" playwright@1.51.1
+          node "$env:RUNNER_TEMP/poster-browser/node_modules/playwright/cli.js" install chromium
+          $env:NODE_PATH = "$env:RUNNER_TEMP/poster-browser/node_modules"
+          node app/tests/browser_smoke.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run: python app/scripts/prepare_ai_sources.py
+      - name: Build complete application candidate
+        run: |
+          python app/scripts/build_offline.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python app/scripts/package_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-application-candidate
+          path: ../PosterNormalizer_V0.4.0-dev_Windows_Offline.*
+          retention-days: 7
+  ai-runtimes:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [modern, powerpaint, anytext]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m pip install pip==24.0 setuptools==69.5.1 wheel
+      - run: python app/scripts/prepare_ai_sources.py
+      - run: python app/scripts/build_ai_runtime.py ${{ matrix.profile }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-ai-${{ matrix.profile }}
+          path: offline-ai/${{ matrix.profile }}/
+          compression-level: 0
+          retention-days: 7

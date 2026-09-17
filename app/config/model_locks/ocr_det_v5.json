@@ -1,0 +1,12 @@
+{
+  "model_id": "ocr_det_v5",
+  "source": "https://github.com/RapidAI/RapidOCR",
+  "files": [
+    {
+      "path": "det.onnx",
+      "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx",
+      "size": 4819576,
+      "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "sam2":{"repo":"facebookresearch/sam2","revision":"2b90b9f5ceec907a1c18123530e92e794ad901a4","prefixes":["sam2/"],"files":["LICENSE","LICENSE_cctorch","README.md"]},
+  "powerpaint":{"repo":"open-mmlab/PowerPaint","revision":"5b4c3d52291709fcec2a1870d987da693fd3549c","prefixes":["powerpaint/"],"files":["LICENSE","README.md"]},
+  "anytext2":{"repo":"tyxsspa/AnyText2","revision":"b06c583a583818f3679665ef67b51363f107853c","prefixes":["cldm/","ldm/","ocr_recog/","models_yaml/"],"files":["LICENSE","README.md","ms_wrapper.py","lora_util.py","bert_tokenizer.py","dataset_util.py","t3_dataset.py","util.py"]}
+}

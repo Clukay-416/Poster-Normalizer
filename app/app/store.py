@@ -12,7 +12,7 @@ class Store:
     def __init__(self, path):
         self.path = path
         with self.connect() as db:
-            if db.execute('PRAGMA user_version').fetchone()[0] > 2:
+            if db.execute('PRAGMA user_version').fetchone()[0] > 3:
                 raise RuntimeError('数据库版本较新，请使用新版程序，禁止旧程序写入')
             db.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -28,10 +28,11 @@ class Store:
             ''')
             columns = {r[1] for r in db.execute('PRAGMA table_info(jobs)')}
             for name, definition in [('priority','INTEGER NOT NULL DEFAULT 0'),('project',"TEXT NOT NULL DEFAULT ''"),
-                                     ('cancel_requested','INTEGER NOT NULL DEFAULT 0')]:
+                                     ('cancel_requested','INTEGER NOT NULL DEFAULT 0'),
+                                     ('trash_from','TEXT'), ('trashed_at','REAL')]:
                 if name not in columns:
                     db.execute(f'ALTER TABLE jobs ADD COLUMN {name} {definition}')
-            db.execute('PRAGMA user_version=2')
+            db.execute('PRAGMA user_version=3')
 
     @contextmanager
     def connect(self):
@@ -70,7 +71,7 @@ class Store:
 
     def list(self, limit=500, offset=0):
         with self.connect() as db:
-            return [self.decode(r) for r in db.execute('SELECT * FROM jobs ORDER BY created DESC LIMIT ? OFFSET ?', (limit, offset))]
+            return [self.decode(r) for r in db.execute("SELECT * FROM jobs WHERE trashed_at IS NULL ORDER BY created DESC LIMIT ? OFFSET ?", (limit, offset))]
 
     def setting(self, key, default=None):
         with self.connect() as db:
@@ -85,17 +86,17 @@ class Store:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT revision,status FROM jobs WHERE id=?', (jid,)).fetchone()
-            if not row or row['revision'] != revision or row['status'] in ('QUEUED', 'RUNNING'):
+            if not row or row['revision'] != revision or row['status'] in ('QUEUED', 'RUNNING', 'TRASHED', 'TRASH_PENDING', 'PURGING'):
                 raise Conflict('任务已被其他人修改或正在处理，请刷新后再试')
             db.execute('UPDATE jobs SET edit=?,revision=revision+1,status=?,error=NULL,cancel_requested=0,updated=? WHERE id=?',
                        (json.dumps(edit), 'QUEUED', time.time(), jid))
             db.execute('INSERT INTO events(job_id,kind,details,created) VALUES (?,?,?,?)',
                        (jid, 'SUBMIT', json.dumps({'revision': revision + 1}), time.time()))
 
-    def claim(self, last_owner=None, skip_lama=False):
+    def claim(self, last_owner=None, skip_lama=False, skip_cuda=False):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            row = db.execute("SELECT * FROM jobs WHERE status='QUEUED' AND (?=0 OR COALESCE(json_extract(edit,'$.engine'),'opencv')!='lama') ORDER BY priority DESC,(owner=?) ASC,updated ASC LIMIT 1", (int(skip_lama),last_owner or '')).fetchone()
+            row = db.execute("SELECT * FROM jobs WHERE status='QUEUED' AND (?=0 OR COALESCE(json_extract(edit,'$.engine'),'opencv')!='lama') AND (?=0 OR COALESCE(json_extract(edit,'$.engine'),'opencv') NOT IN ('sdxl','powerpaint')) ORDER BY priority DESC,(owner=?) ASC,updated ASC LIMIT 1", (int(skip_lama),int(skip_cuda),last_owner or '')).fetchone()
             if not row:
                 return None
             db.execute("UPDATE jobs SET status='RUNNING',updated=? WHERE id=?", (time.time(), row['id']))
@@ -105,7 +106,7 @@ class Store:
 
     def finish(self, jid, revision, status, error=None):
         with self.connect() as db:
-            db.execute("UPDATE jobs SET status=CASE WHEN cancel_requested=1 THEN 'CANCELLED' ELSE ? END,error=?,updated=? WHERE id=? AND revision=? AND status='RUNNING'",
+            db.execute("UPDATE jobs SET status=CASE WHEN trashed_at IS NOT NULL THEN 'TRASHED' WHEN cancel_requested=1 THEN 'CANCELLED' ELSE ? END,error=?,updated=? WHERE id=? AND revision=? AND status IN ('RUNNING','TRASH_PENDING')",
                        (status, error, time.time(), jid, revision))
             db.execute('INSERT INTO events(job_id,kind,details,created) VALUES (?,?,?,?)',
                        (jid, status, json.dumps({'revision': revision, 'error': error}), time.time()))
@@ -113,9 +114,14 @@ class Store:
     def recover(self):
         with self.connect() as db:
             db.execute("UPDATE jobs SET status='INTERRUPTED',error='上次服务中断，请重试',updated=? WHERE status='RUNNING'", (time.time(),))
+            db.execute("UPDATE jobs SET status='TRASHED' WHERE status='TRASH_PENDING'")
 
     def approve(self, jid, revision):
         with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT status,revision FROM jobs WHERE id=?', (jid,)).fetchone()
+            if row and row['revision'] == revision and row['status'] == 'COMPLETED':
+                return  # A retry after a lost HTTP response is safe.
             changed = db.execute("UPDATE jobs SET status='COMPLETED',updated=? WHERE id=? AND revision=? AND status='REVIEW'", (time.time(), jid, revision)).rowcount
             if not changed:
                 raise Conflict('只能确认当前版本的待复核结果')
@@ -124,6 +130,8 @@ class Store:
 
     def page(self, query='', status='', project='', batch='', limit=100, offset=0):
         where, args = ['1=1'], []
+        if status not in ('TRASHED','TRASH_PENDING','PURGING'):
+            where.append('trashed_at IS NULL')
         for column,value in [('status',status),('project',project),('batch_id',batch)]:
             if value:
                 where.append(column+'=?');args.append(value)
@@ -145,7 +153,19 @@ class Store:
             if not row or row['revision']!=revision:
                 raise Conflict('任务版本已变化，请刷新')
             status=row['status']
-            if action=='pause' and status=='QUEUED':
+            if action=='trash' and status not in ('TRASHED','TRASH_PENDING','PURGING'):
+                target = 'TRASH_PENDING' if status == 'RUNNING' else 'TRASHED'
+                db.execute('UPDATE jobs SET status=?,trash_from=?,trashed_at=?,cancel_requested=1,updated=? WHERE id=?',
+                           (target,status,time.time(),time.time(),jid))
+            elif action=='restore' and status=='TRASHED':
+                target=row['trash_from'] or 'MANUAL'
+                if target in ('RUNNING','QUEUED'):
+                    target='INTERRUPTED'
+                db.execute('UPDATE jobs SET status=?,trash_from=NULL,trashed_at=NULL,cancel_requested=0,updated=? WHERE id=?',
+                           (target,time.time(),jid))
+            elif action=='purge' and status=='TRASHED':
+                db.execute("UPDATE jobs SET status='PURGING',updated=? WHERE id=?",(time.time(),jid))
+            elif action=='pause' and status=='QUEUED':
                 db.execute("UPDATE jobs SET status='PAUSED',updated=? WHERE id=?",(time.time(),jid))
             elif action=='resume' and status=='PAUSED':
                 db.execute("UPDATE jobs SET status='QUEUED',updated=? WHERE id=?",(time.time(),jid))
@@ -159,4 +179,4 @@ class Store:
 
     def has_busy(self):
         with self.connect() as db:
-            return bool(db.execute("SELECT 1 FROM jobs WHERE status IN ('RUNNING','QUEUED') LIMIT 1").fetchone())
+            return bool(db.execute("SELECT 1 FROM jobs WHERE status IN ('RUNNING','QUEUED','TRASH_PENDING') LIMIT 1").fetchone())
