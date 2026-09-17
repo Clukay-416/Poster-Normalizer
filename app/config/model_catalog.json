@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "models": [
+    {
+      "id": "ocr_det_v5",
+      "name": "PP-OCRv5 · 标题区域检测",
+      "purpose": "本地检测文字候选；不保证能读懂艺术字，不自动批准结果",
+      "adapter": "ocr_det_onnx",
+      "license": "RapidOCR 转换版，上游 PaddleOCR；来源与许可文件需按用途审阅",
+      "source_page": "https://github.com/RapidAI/RapidOCR",
+      "files": [{"path": "det.onnx", "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx", "size": 4819576, "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"}]
+    },
+    {
+      "id": "lama_onnx",
+      "name": "LaMa · ONNX 局部修补",
+      "purpose": "社区导出版本；下载后需启用并完成本机自检，不会重绘蒙版外像素",
+      "adapter": "lama_onnx",
+      "license": "Carve 社区转换；原 LaMa 权重许可需另核查，默认未启用",
+      "source_page": "https://huggingface.co/Carve/LaMa-ONNX",
+      "files": [{"path": "lama_fp32.onnx", "url": "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx", "size": 208044816, "sha256": "1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6"}]
+    },
+    {
+      "id": "sam2_1_small",
+      "name": "SAM 2.1 small · 精细分割（储备）",
+      "purpose": "可下载储备权重；本包尚未实现 SAM 推理，不会显示为可用模型",
+      "adapter": null,
+      "license": "Meta SAM2：代码与 checkpoint Apache-2.0；保留上游说明",
+      "source_page": "https://github.com/facebookresearch/sam2",
+      "resolver": {"type": "hf", "repo": "facebook/sam2.1-hiera-small", "patterns": ["*.pt", "README.md", "LICENSE*"]}
+    },
+    {
+      "id": "grounding_dino",
+      "name": "GroundingDINO tiny · 语义检测（储备）",
+      "purpose": "可下载 Transformers 格式的完整推理资产；本包尚未实现其推理适配",
+      "adapter": null,
+      "license": "上游代码许可不替代每项权重许可，请检查仓库模型卡",
+      "source_page": "https://huggingface.co/IDEA-Research/grounding-dino-tiny",
+      "resolver": {"type": "hf", "repo": "IDEA-Research/grounding-dino-tiny", "patterns": ["*.safetensors", "*.json", "*.txt", "README.md", "LICENSE*"]}
+    },
+    {
+      "id": "anytext2",
+      "name": "AnyText2 · 标题重建（储备）",
+      "purpose": "通过官方 ModelScope 仓库准备模型资产；本包未接入生成适配，不执行标题生成",
+      "adapter": null,
+      "license": "核对官方仓库与所含基础模型各自许可；下载不表示获准商用",
+      "source_page": "https://github.com/tyxsspa/AnyText2",
+      "resolver": {"type": "modelscope", "repo": "iic/cv_anytext2"}
+    },
+    {
+      "id": "brushnetx",
+      "name": "BrushNetX · 困难修补（待锁定）",
+      "purpose": "基础 SD 模型与依赖版本尚未锁定，避免下载不兼容的巨型组合；本版不提供一键下载或推理",
+      "adapter": null,
+      "license": "需同时核查 BrushNet 与基础 SD 模型许可",
+      "source_page": "https://github.com/TencentARC/BrushNet",
+      "files": []
+    }
+  ]
+}

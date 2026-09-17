@@ -134,4 +134,29 @@ class Store:
         with self.connect() as db:
             total=db.execute('SELECT COUNT(*) FROM jobs WHERE '+clause,args).fetchone()[0]
             rows=db.execute('SELECT * FROM jobs WHERE '+clause+' ORDER BY created DESC LIMIT ? OFFSET ?',args+[limit,offset])
-            result=[self.decode(r) for r in€ΩÙ∂âûÀk∫wµÁfˆÊÁá'VÁFñ÷S””„#2„#≤7ó5˜∆Ff˜&““wvñ„3"p†
+            result=[self.decode(r) for r in rows]
+            counts={r[0]:r[1] for r in db.execute('SELECT status,COUNT(*) FROM jobs GROUP BY status')}
+        return {'total':total,'items':result,'counts':counts}
+
+    def action(self, jid, revision, action):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT * FROM jobs WHERE id=?',(jid,)).fetchone()
+            if not row or row['revision']!=revision:
+                raise Conflict('‰ªªÂä°ÁâàÊú¨Â∑≤ÂèòÂåñÔºåËØ∑Âà∑Êñ∞')
+            status=row['status']
+            if action=='pause' and status=='QUEUED':
+                db.execute("UPDATE jobs SET status='PAUSED',updated=? WHERE id=?",(time.time(),jid))
+            elif action=='resume' and status=='PAUSED':
+                db.execute("UPDATE jobs SET status='QUEUED',updated=? WHERE id=?",(time.time(),jid))
+            elif action=='cancel' and status=='RUNNING':
+                db.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?',(jid,))
+            elif action=='cancel' and status in ('QUEUED','PAUSED','MANUAL','FAILED','INTERRUPTED'):
+                db.execute("UPDATE jobs SET status='CANCELLED',updated=? WHERE id=?",(time.time(),jid))
+            else:
+                raise Conflict('ÂΩìÂâçÁä∂ÊÄÅ‰∏çÂÖÅËÆ∏Ê≠§Êìç‰Ωú')
+            db.execute('INSERT INTO events(job_id,kind,details,created) VALUES (?,?,?,?)',(jid,action,'',time.time()))
+
+    def has_busy(self):
+        with self.connect() as db:
+            return bool(db.execute("SELECT 1 FROM jobs WHERE status IN ('RUNNING','QUEUED') LIMIT 1").fetchone())
