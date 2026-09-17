@@ -20,9 +20,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .gpu import MODES, snapshot
-from .imaging import read_image, process, validate_edit
+from .imaging import read_image, process, validate_edit, get_mask, decode_data
 from .store import Conflict, Store
-from .paths import default_data
+from .paths import default_data, atomic_json
 from .model_center import ModelCenter
 from .local_ai import LocalAI
 
@@ -125,7 +125,7 @@ def create_app(data_path=None, run_worker=True):
         if thread:
             thread.join(timeout=10)
 
-    app = FastAPI(title='海报规范化工作台', version='0.3.1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='海报规范化工作台', version='0.3.2', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
     app.state.codes = codes
     app.state.jobs_root = jobs_root
@@ -188,7 +188,7 @@ def create_app(data_path=None, run_worker=True):
 
     @app.get('/api/health')
     def health():
-        return {'application':'poster-normalizer','version':'0.3.1','ready':True}
+        return {'application':'poster-normalizer','version':'0.3.2','ready':True}
 
     @app.post('/api/login')
     def login(body: Login, request: Request, response: Response):
@@ -324,7 +324,32 @@ def create_app(data_path=None, run_worker=True):
 
     @app.get('/api/jobs/{jid}/edit')
     def edit_state(jid: str, user=Depends(member)):
-        return get_job(jid)['edit'] or {}
+        job = get_job(jid)
+        path = jobs_root/jid/'draft.json'
+        if path.is_file():
+            draft = json.loads(path.read_text(encoding='utf-8'))
+            if draft['revision'] == job['revision']:
+                return draft['edit']
+        return job['edit'] or {}
+
+    @app.post('/api/jobs/{jid}/draft')
+    def save_draft(jid: str, body: Edit, user=Depends(member)):
+        job = get_job(jid)
+        if job['revision'] != body.revision or job['status'] in ('RUNNING', 'QUEUED'):
+            raise HTTPException(409, '任务已变化或正在处理，请刷新后保存草稿')
+        edit = body.model_dump(exclude={'revision'})
+        try:
+            get_mask(edit['repair_mask'], (job['width'],job['height']))
+            if edit.get('extract_mask'):
+                get_mask(edit['extract_mask'], (job['width'],job['height']))
+            if edit.get('logo'):
+                decode_data(edit['logo'])
+            if edit['engine'] not in ('opencv','lama'):
+                raise ValueError('修补引擎不合法')
+        except Exception as exc:
+            raise HTTPException(422, str(exc) if isinstance(exc,ValueError) else '草稿图片无法读取')
+        atomic_json(jobs_root/jid/'draft.json', {'revision': body.revision, 'edit': edit})
+        return {'ok': True}
 
     @app.post('/api/jobs/{jid}/submit')
     def submit(jid: str, body: Edit, user=Depends(member)):
@@ -412,6 +437,8 @@ def create_app(data_path=None, run_worker=True):
                 handle.close()
         return StreamingResponse(chunks(), media_type='application/zip', headers={'Content-Disposition':'attachment; filename="poster-results.zip"'})
 
+    from .title_routes import register_titles
+    register_titles(app, data, member, get_job)
     from .feature_routes import register_features
     register_features(app,data,store,models,ai,member,admin,get_job,public,normalize_upload,config,choose_profile)
     app.mount('/', StaticFiles(directory=ROOT/'static', html=True), name='static')

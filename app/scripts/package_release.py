@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[2]
-out=root.parent/'PosterNormalizer_V0.3.1_Windows_Offline.zip'
+out=root.parent/'PosterNormalizer_V0.3.2_Windows_Offline.zip'
 manifest=json.loads((root/'offline/manifest.json').read_text())
 for name,entry in manifest['files'].items():
     path=root/'offline'/name
@@ -20,7 +20,7 @@ for p in sorted(root.rglob('*')):
     if not p.is_file() or any(part in excluded for part in rel.parts):continue
     if p.suffix in ('.pyc','.part','.log','.db','.sqlite','.sqlite3','.onnx','.pt','.pth','.safetensors'):continue
     paths.append((p,rel))
-prefix='PosterNormalizer_V0.3.1/'
+prefix='PosterNormalizer_V0.3.2/'
 with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
     for p,rel in paths:
         blob=p.read_bytes()

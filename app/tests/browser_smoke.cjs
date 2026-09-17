@@ -1,0 +1,48 @@
+/* Real-browser offline roundtrip. Requires playwright + Chromium in the test environment. */
+const {chromium}=require('playwright');
+const {spawn}=require('node:child_process');
+const {mkdtempSync}=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const state=mkdtempSync(path.join(os.tmpdir(),'poster-ui-'));
+const port=Number(process.env.POSTER_TEST_PORT||38791),url='http://127.0.0.1:'+port;
+const server=spawn(process.env.POSTER_TEST_PYTHON||'python',['-u','-c',
+ 'import sys; import uvicorn; from app.main import create_app; app=create_app(sys.argv[1],run_worker=False); app.state.codes["admin"]="isolated-ui-test"; uvicorn.run(app,host="127.0.0.1",port=int(sys.argv[2]),log_level="error")',state,String(port)],{cwd:path.resolve(__dirname,'..'),stdio:['ignore','ignore','pipe']});
+server.stderr.on('data',data=>process.stderr.write(data));
+let browser;
+(async()=>{
+ let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw Error('Test server stopped');try{if((await fetch(url+'/api/health')).ok){ready=true;break;}}catch{}await delay(200);}assert(ready,'Test server unavailable');
+ browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1400,height:1000}}),page=await context.newPage(),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ assert((await context.request.post(url+'/api/login',{data:{name:'UI tester',code:'isolated-ui-test'}})).ok());
+ await page.goto(url+'/titles.html');
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=120;c.height=80;const x=c.getContext('2d');x.fillStyle='#daa520';x.fillRect(10,10,70,50);x.fillStyle='red';x.fillRect(100,60,10,10);return c.toDataURL();});
+ await page.locator('#titleFile').setInputFiles({name:'测试标题.png',mimeType:'image/png',buffer:Buffer.from(png.split(',')[1],'base64')});
+ await page.waitForFunction(()=>document.getElementById('titleCanvas').width===120);
+ const alpha=()=>page.evaluate(()=>document.getElementById('titleCanvas').getContext('2d').getImageData(35,30,1,1).data[3]);
+ assert.equal(await alpha(),255);
+ await page.locator('#titleCanvas').click({position:{x:35,y:30}});assert.equal(await alpha(),0);
+ await page.locator('#undo').click();assert.equal(await alpha(),255);
+ await page.locator('#redo').click();assert.equal(await alpha(),0);
+ await page.selectOption('#titleTool','restore');await page.locator('#titleCanvas').click({position:{x:35,y:30}});assert.equal(await alpha(),255);
+ await page.selectOption('#titleTool','component');await page.locator('#titleCanvas').click({position:{x:105,y:65}});
+ assert.equal(await page.evaluate(()=>document.getElementById('titleCanvas').getContext('2d').getImageData(105,65,1,1).data[3]),0);
+ await page.locator('#saveTitle').click();await page.waitForFunction(()=>document.getElementById('titleStatus').textContent.includes('已保存新版本'));
+ const first=(await (await context.request.get(url+'/api/titles')).json()).items[0];
+ await page.reload();await page.locator('#titleLibrary button').filter({hasText:'打开编辑'}).first().click();await page.waitForFunction(()=>document.getElementById('titleCanvas').width===120);
+ assert.equal(await alpha(),255);
+ const downloadPromise=page.waitForEvent('download');await page.locator('#exportTitle').click();const download=await downloadPromise;assert(download.suggestedFilename().endsWith('.png'));
+ const uploaded=await context.request.post(url+'/api/jobs/batch',{multipart:{profile:'auto',files:{name:'poster.png',mimeType:'image/png',buffer:Buffer.from(png.split(',')[1],'base64')}}});
+ const jid=(await uploaded.json()).items[0].id;assert(jid);
+ await page.goto(url+'/?job='+jid+'&title='+first.id);await page.waitForFunction(()=>typeof logo!=='undefined'&&logo&&selected);
+ await page.evaluate(()=>{const c=repair.getContext('2d');c.fillStyle='white';c.fillRect(0,0,5,5);});
+ await page.locator('#editTitle').click();await page.waitForURL('**/titles.html?**');await page.waitForFunction(()=>document.getElementById('titleCanvas').width>1);
+ const draft=await (await context.request.get(url+'/api/jobs/'+jid+'/edit')).json();assert(draft.repair_mask);
+ await page.locator('#applyTitle').click();await page.waitForURL('**/?job=**');await page.waitForFunction(()=>typeof logo!=='undefined'&&logo&&selected);
+ assert.equal(await page.evaluate(()=>repair.getContext('2d').getImageData(2,2,1,1).data[3]),255);
+ await page.goto(url+'/assets.html');await page.waitForSelector('#assetKind');await page.selectOption('#assetKind','logos');await page.fill('#query','暗刃');await page.click('#search');await page.waitForFunction(()=>document.getElementById('sourceStatus').textContent.includes('离线上传'));
+ assert.equal(await page.locator('a[href="https://fanart.tv/"]').count(),1);assert.deepEqual(errors,[]);
+ console.log('PASS: offline import, erase/restore, undo/redo, connected-component deletion, save/reopen, PNG export, title-task roundtrip, draft preservation, offline lookup fallback');
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.kill();});

@@ -1,17 +1,15 @@
 'use strict';
 const $=id=>document.getElementById(id);
+let serial=0;
 function candidate(asset){
- const card=node('article','','card panel');const image=document.createElement('img');image.src=asset.preview_url;image.alt=asset.title||asset.label||'海报候选';image.loading='lazy';image.referrerPolicy='no-referrer';
- const meta=[asset.provider.toUpperCase(),asset.title||'作品名称未知',asset.orientation,asset.width&&asset.height?`${asset.width}×${asset.height}`:'尺寸待下载确认',asset.language||''].filter(Boolean).join(' · ');
- card.append(image,node('h3',asset.title||asset.label||'海报候选'),node('p',meta,'subtle'),button('下载并进入编辑',async()=>{const result=await request(`/assets/${asset.id}/import`,{profile:$('profile').value});message(`已导入${result.orientation}海报，使用 ${result.profile_key} 规格`);location.href='/?job='+encodeURIComponent(result.job_id)}));return card;
+ const card=node('article','','card panel'),img=document.createElement('img');img.src=asset.preview_url;img.alt=asset.title||asset.label||'素材候选';img.loading='lazy';img.referrerPolicy='no-referrer';
+ const isLogo=/logo/i.test(asset.kind),meta=[asset.provider.toUpperCase(),asset.orientation,asset.width&&asset.height?asset.width+'×'+asset.height:'尺寸待下载确认',asset.language||''].filter(Boolean).join(' · ');
+ card.append(img,node('h3',asset.title||asset.label||'素材候选'),node('p',meta,'subtle'),button(isLogo?'下载并精修标题':'下载并创建海报任务',async()=>{if(isLogo){await request('/assets/'+asset.id+'/download',{});location.href='/titles.html?asset='+asset.id;}else{const result=await request('/assets/'+asset.id+'/import',{profile:$('profile').value});location.href='/?job='+encodeURIComponent(result.job_id);}}),button('仅下载原始尺寸 PNG',async()=>{await request('/assets/'+asset.id+'/download',{});const a=document.createElement('a');a.href='/api/assets/'+asset.id+'/image';a.download='asset.png';a.click();}));return card;
 }
-async function search(){
- const q=$('query').value.trim();if(!q)throw Error('请输入影视名称');$('results').replaceChildren(node('p','正在查询两个来源并整理候选…','subtle'));
- const data=await request('/assets/discover?'+new URLSearchParams({q}));$('sourceStatus').textContent=data.sources.map(s=>`${s.provider}：${s.note}`).join('　');$('results').replaceChildren();
- for(const asset of data.assets)$('results').append(candidate(asset));
- if(!data.assets.length)$('results').append(node('p','没有找到可用海报候选；可检查名称、网络或 TMDB 配置。'));
-}
-bind('search',search);$('query').addEventListener('keydown',e=>{if(e.key==='Enter')search().catch(e=>message(e.message))});
-bind('save',async()=>{const body={network_enabled:$('network').checked};if($('tmdb').value)body.tmdb_token=$('tmdb').value;if($('fanart').value)body.fanart_key=$('fanart').value;await request('/assets/config',body,'PUT');$('tmdb').value='';$('fanart').value='';message('已保存');await setup()});
-async function setup(){const [config,settings]=await Promise.all([request('/assets/config'),request('/settings')]);$('network').checked=config.network_enabled;$('configured').textContent=`TMDB：${config.tmdb_configured?'已配置':'未配置'}；Fanart：${config.fanart_configured?'已配置':'未配置'}`;for(const [key,value] of Object.entries(settings.profiles)){const option=new Option(value.name,key);$('profile').append(option)}}
-request('/me').then(async user=>{if(user.role==='admin'){$('configuration').hidden=false;await setup()}else{const settings=await request('/settings');for(const [key,value] of Object.entries(settings.profiles))$('profile').append(new Option(value.name,key))}}).catch(e=>message(e.message));
+function render(data){$('results').replaceChildren();for(const asset of data.assets)$('results').append(candidate(asset));if(!data.assets.length)$('results').append(node('p','没有匹配素材。可换别名、在官网手工查询或直接上传；不会阻止离线编辑。'));}
+async function search(){const ticket=++serial,q=$('query').value.trim();if(!q)throw Error('请输入影视名称');$('results').replaceChildren(node('p','正在整理候选，网络失败不会影响本地任务…'));try{const data=await request('/assets/discover?'+new URLSearchParams({q,kind:$('assetKind').value}));if(ticket!==serial)return;$('sourceStatus').textContent=data.sources.map(s=>s.provider+'：'+s.note).join('　');render(data);}catch(e){if(ticket===serial){$('results').replaceChildren();$('sourceStatus').textContent=e.message+'；可使用下方离线上传入口。';}throw e;}}
+bind('search',search);$('query').addEventListener('keydown',e=>{if(e.key==='Enter')search().catch(e=>message(e.message));});
+bind('fanartSearch',async()=>{const ticket=++serial,id=$('fanartId').value.trim();if(!/^\d+$/.test(id))throw Error('请输入数字作品 ID');const data=await request('/assets/search?'+new URLSearchParams({provider:'fanart',media_id:id,media_type:$('fanartType').value}));if(ticket!==serial)return;data.assets=data.assets.filter(a=>/logo/i.test(a.kind));$('sourceStatus').textContent='Fanart 透明标题候选；需自行核对语言与作品';render(data);});
+bind('save',async()=>{const body={network_enabled:$('network').checked};if($('tmdb').value)body.tmdb_token=$('tmdb').value;if($('fanart').value)body.fanart_key=$('fanart').value;await request('/assets/config',body,'PUT');$('tmdb').value='';$('fanart').value='';message('已保存');await setup();});
+async function setup(){const user=await request('/me');if(user.role==='admin'){$('configuration').hidden=false;const config=await request('/assets/config');$('network').checked=config.network_enabled;$('configured').textContent='TMDB：'+(config.tmdb_configured?'已配置':'未配置')+'；Fanart：'+(config.fanart_configured?'已配置':'未配置');}const settings=await request('/settings');$('profile').replaceChildren(new Option('自动匹配横版 / 竖版（推荐）','auto'));for(const [key,value] of Object.entries(settings.profiles))$('profile').append(new Option(value.name,key));}
+setup().catch(e=>message(e.message));

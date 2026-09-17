@@ -47,6 +47,11 @@ def get_mask(value, size):
     image = decode_data(value)
     if image.size != size:
         raise ValueError('蒙版尺寸必须与规范化原图一致')
+    # Canvas masks encode coverage in alpha. Legacy grayscale masks encode it in L.
+    if 'A' in image.getbands():
+        gray = np.asarray(image.convert('L'), dtype=np.uint16)
+        alpha = np.asarray(image.getchannel('A'), dtype=np.uint16)
+        return ((gray * alpha + 127) // 255).astype(np.uint8)
     return np.asarray(image.convert('L'))
 
 
