@@ -1,10 +1,27 @@
 import psutil
+import threading
+import time
+
+_lock=threading.Lock()
+_cached=None
+_cached_at=0
 
 MODES = ('POSTER_MAX', 'BALANCED', 'ADOBE_PRIORITY', 'PAUSE_AI')
 
 
 def snapshot(mode):
-    result = {'mode':mode,'available':False,'name':None,'utilization':None,'free_mb':None,
+    global _cached,_cached_at
+    # Process enumeration on Windows is expensive; never repeat it for each CPU job.
+    # Mode remains live; hardware/Adobe observations refresh at most every 2 seconds.
+    with _lock:
+        if _cached is None or time.monotonic()-_cached_at>=2:
+            _cached=_read_snapshot()
+            _cached_at=time.monotonic()
+        return {**_cached,'mode':mode,'adobe':list(_cached['adobe'])}
+
+
+def _read_snapshot():
+    result = {'available':False,'name':None,'utilization':None,'free_mb':None,
               'total_mb':None,'encoder':None,'decoder':None,'adobe':[],
               'inference_backend':'由应用当前计算后端决定','per_process_supported':False}
     for p in psutil.process_iter(['name']):

@@ -115,6 +115,7 @@ class Store:
         with self.connect() as db:
             db.execute("UPDATE jobs SET status='INTERRUPTED',error='上次服务中断，请重试',updated=? WHERE status='RUNNING'", (time.time(),))
             db.execute("UPDATE jobs SET status='TRASHED' WHERE status='TRASH_PENDING'")
+            db.execute("UPDATE jobs SET status='TRASHED',error='上次永久删除中断，请重试清理' WHERE status='PURGING'")
 
     def approve(self, jid, revision):
         with self.connect() as db:

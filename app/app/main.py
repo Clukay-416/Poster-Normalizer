@@ -85,9 +85,9 @@ def create_app(data_path=None, run_worker=True):
                 stop.wait(.3)
                 continue
             mode=store.setting('gpu_mode',config['gpu_mode'])
+            state=snapshot(mode)
             skip_lama=False
             if store.setting('compute_device','CPU')=='GPU_AUTO':
-                state=snapshot(mode)
                 skip_lama=mode=='PAUSE_AI'
                 if mode=='BALANCED':
                     skip_lama=state['utilization'] is None or state['utilization']>=80 or state['free_mb'] is None or state['free_mb']<6000
@@ -95,7 +95,6 @@ def create_app(data_path=None, run_worker=True):
                     if state['adobe'] and (state['utilization'] is None or state['utilization']>=20):
                         last_gpu_busy=time.monotonic()
                     skip_lama=time.monotonic()-last_gpu_busy<20
-            state=snapshot(mode)
             skip_cuda=mode=='PAUSE_AI' or ai.cuda.process is not None
             if mode=='ADOBE_PRIORITY':
                 skip_cuda=skip_cuda or bool(state['adobe'])

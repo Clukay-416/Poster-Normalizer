@@ -45,6 +45,8 @@ jobs:
           path: ../PosterNormalizer_V0.4.0-dev_Windows_Offline.*
           retention-days: 7
   ai-runtimes:
+    # Rebuild large packs on explicit dispatch. The first validated packs are retained separately.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 90
     strategy:

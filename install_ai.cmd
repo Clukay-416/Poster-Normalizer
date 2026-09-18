@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-call install_offline.cmd
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0install_offline.ps1"
 if errorlevel 1 exit /b 1
 "runtime\python\python.exe" "app\scripts\install_ai.py"
 if errorlevel 1 (

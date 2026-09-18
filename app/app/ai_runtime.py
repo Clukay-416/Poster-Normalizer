@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tempfile
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -74,11 +75,15 @@ class CudaRuntime:
                         self.process.kill();self.process.wait()
                         raise ValueError('模型推理超过 30 分钟，已释放进程；请降低分辨率或步数')
                 result_path=root/'result.json'
+                logs=self.center.data/'ai_logs';logs.mkdir(exist_ok=True)
+                log_id=str(time.time_ns())
+                shutil.copyfile(root/'worker.log',logs/(log_id+'.log'))
+                for old in sorted(logs.glob('*.log'))[:-20]:old.unlink(missing_ok=True)
                 if not result_path.is_file():
-                    raise ValueError('AI 运行环境启动失败，请执行离线运行包的环境检查')
+                    raise ValueError('AI 运行环境启动失败；详情见 data/ai_logs/'+log_id+'.log')
                 result=json.loads(result_path.read_text(encoding='utf-8'))
                 if not result.get('ok'):
-                    raise ValueError(result.get('error','模型推理失败'))
+                    raise ValueError(result.get('error','模型推理失败')+'；日志 '+log_id+'.log')
                 outputs=[]
                 for name in result.get('images',[]):
                     if Path(name).name!=name:raise ValueError('AI 输出路径不合法')

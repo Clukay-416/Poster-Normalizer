@@ -64,3 +64,55 @@ def test_frontend_backend_geometry_agree():
     for args,actual in zip(cases,result):
         assert list(placement(*args))==[actual[k] for k in ('x','y','w','h')]
     with pytest.raises(ValueError):validate_geometry({'background':{'zoom':float('nan')}},(10,10))
+
+
+def test_compose_only_without_masks_or_title(client):
+    from test_workflow import data
+    from PIL import Image
+    c,app=client;jid=upload(c)
+    request={'revision':0,'operation':'compose','repair_mask':data(Image.new('L',(240,360))),
+             'background':{'mode':'cover','zoom':2,'x':5,'y':-10}}
+    assert c.post(f'/api/jobs/{jid}/submit',json=request).status_code==200
+    first=wait(c,jid);assert first['status']=='REVIEW'
+    before=c.get(f'/api/jobs/{jid}/artifact/base.png').content
+    request.update(revision=1,base_revision=1,background={'mode':'contain','zoom':1,'x':0,'y':0})
+    assert c.post(f'/api/jobs/{jid}/submit',json=request).status_code==200
+    assert wait(c,jid)['status']=='REVIEW'
+    assert c.get(f'/api/jobs/{jid}/artifact/base.png').content==before
+
+
+def test_multiple_candidates_preserve_protection_and_history(client,monkeypatch):
+    import io
+    import numpy as np
+    from PIL import Image,ImageDraw
+    from test_workflow import data
+    c,app=client;jid=upload(c);image,edit=inputs()
+    protected=Image.new('L',image.size);ImageDraw.Draw(protected).rectangle((70,220,90,270),fill=255)
+    # Pipeline contract fake, intentionally NOT a model inference/quality test.
+    monkeypatch.setattr(app.state.models,'require',lambda mid:app.state.models.root/mid)
+    monkeypatch.setattr(app.state.ai.cuda,'run',lambda mid,op,rgb,mask,params:{'outputs':[np.full_like(rgb,20),np.full_like(rgb,220)]})
+    app.state.store.set_setting('gpu_mode','POSTER_MAX')
+    request={'revision':0,**edit,'engine':'sdxl','protection_mask':data(protected),
+             'repair_params':{'candidates':2,'dilate':4,'feather':3}}
+    assert c.post(f'/api/jobs/{jid}/submit',json=request).status_code==200
+    job=wait(c,jid);assert job['status']=='REVIEW',job
+    assert job['qc']['candidate_count']==2
+    source=np.array(image);mask=np.array(Image.open(io.BytesIO(c.get(f'/api/jobs/{jid}/artifact/repair_mask.png').content)))
+    for i in (0,1):
+        out=np.array(Image.open(io.BytesIO(c.get(f'/api/jobs/{jid}/artifact/base-{i}.png').content)))
+        assert np.array_equal(out[mask==0],source[mask==0])
+        assert np.array_equal(out[np.array(protected)>0],source[np.array(protected)>0])
+    old=c.get(f'/api/jobs/{jid}/artifact/final.png?revision=1').content
+    chosen=c.get(f'/api/jobs/{jid}/artifact/final-1.png').content
+    r=c.post(f'/api/jobs/{jid}/candidate',json={'revision':1,'index':1})
+    assert r.status_code==200 and r.json()['revision']==2
+    assert c.get(f'/api/jobs/{jid}/artifact/final.png').content==chosen
+    assert c.get(f'/api/jobs/{jid}/artifact/final.png?revision=1').content==old
+    assert c.post(f'/api/jobs/{jid}/approve',json={'revision':1}).status_code==409
+    assert c.post(f'/api/jobs/{jid}/candidate',json={'revision':1,'index':0}).status_code==409
+
+
+def test_generation_requires_explicit_confirmation(client):
+    c,app=client
+    assert c.post('/api/titles/rebuild',json={'text':'测试'}).status_code==422
+    assert c.post('/api/models/anytext2/self-test',json={}).status_code==422
