@@ -27,11 +27,15 @@ def safe(root,name):
 
 def install(profile):
     source=ROOT/'offline-ai'/profile
-    manifest=json.loads((source/'manifest.json').read_text())
+    manifest_path=source/'manifest.json'
+    if not manifest_path.is_file():
+        source=ROOT/'offline-ai'
+        manifest_path=source/f'PosterAI-{profile}.manifest.json'
+    manifest=json.loads(manifest_path.read_text())
     if manifest['profile']!=profile or not manifest.get('import_test_passed'):raise ValueError('Runtime manifest invalid')
     base=ROOT/'runtime-ai';base.mkdir(exist_ok=True)
     target=base/profile
-    fingerprint=sha(source/'manifest.json')
+    fingerprint=sha(manifest_path)
     if (target/'installed.txt').is_file() and (target/'installed.txt').read_text().strip()==fingerprint:
         print(profile,'already installed');return
     needed=sum(v['size'] for v in manifest['files'].values())+sum(v['size'] for v in manifest['parts'])
@@ -54,8 +58,13 @@ def install(profile):
                 with archive.open(name) as src,dest.open('wb') as out:shutil.copyfileobj(src,out,8*1024*1024)
                 if dest.stat().st_size!=item['size'] or sha(dest)!=item['sha256']:raise ValueError('Corrupt runtime file: '+name)
         (unpack/'installed.txt').write_text(fingerprint)
-        if target.exists():target.rename(base/(profile+'-backup-'+uuid.uuid4().hex))
-        unpack.rename(target)
+        backup=base/(profile+'-backup-'+uuid.uuid4().hex)
+        if target.exists():target.rename(backup)
+        try:unpack.rename(target)
+        except OSError:
+            if backup.exists():backup.rename(target)
+            raise
+        if backup.exists():shutil.rmtree(backup,ignore_errors=True)
         print(profile,'installed without network access')
     finally:
         shutil.rmtree(stage,ignore_errors=True)
@@ -71,6 +80,6 @@ if __name__=='__main__':
             except OSError:raise SystemExit('Close Poster Normalizer before installing AI runtimes.')
     found=False
     for profile in ('modern','powerpaint','anytext'):
-        if (ROOT/'offline-ai'/profile/'manifest.json').is_file():
+        if (ROOT/'offline-ai'/profile/'manifest.json').is_file() or (ROOT/'offline-ai'/f'PosterAI-{profile}.manifest.json').is_file():
             found=True;install(profile)
     if not found:raise SystemExit('No offline AI packs. Place downloaded profile folders inside offline-ai first.')

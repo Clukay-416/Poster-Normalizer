@@ -2,7 +2,7 @@
 
 Windows 本地 WebUI，用于海报原标题选区、局部修补、Logo 搬移、统一排版和批量人工审核。不使用付费生成式 AI API；推理模型按需下载到独立目录。支持可信局域网工作组访问。
 
-当前基线 V0.3.2，仍是测试版本。本版修复蒙版透明擦除，新增独立标题工作室与分类素材检索，详见 [更新与升级说明](docs/RELEASE_V0.3.2.md)。删除任务、整图缩放裁切与大模型修补仍未完成，不要将计划中的功能当作当前能力。
+当前开发版本 V0.4.0 RC1，完整应用及 AI 离线运行环境分卷发布，模型权重单独下载。新增复核修复、回收站、整图缩放裁切及多模型适配，详见 [下载、安装与验收说明](docs/RELEASE_V0.4.0-rc1.md)。真实 RTX 4090 权重推理与画质仍待实机验收。
 
 ## 能力
 
@@ -11,7 +11,8 @@ Windows 本地 WebUI，用于海报原标题选区、局部修补、Logo 搬移�
 - 独立标题库、透明背景精修、擦除/恢复/撤销/重做、点选删除连通杂块、透明 PNG 导出和任务草稿保留。
 - TMDB 透明标题与背景分类、Fanart 作品 ID 检索、官网链接及离线手工导入。背景图不保证无字。
 - 本地 PP-OCRv5 检测与 LaMa ONNX 适配。GPU 可选 Windows DirectML，默认 CPU。
-- 模型中心下载/续传/校验/独立目录；SAM、GroundingDINO、AnyText2 仅资产储备，未接入推理。
+- 模型中心下载/续传/校验/独立目录；SAM2.1、GroundingDINO、SDXL Inpainting、PowerPaint V2、AnyText2 推理适配与独立运行环境。
+- 任务回收站与恢复、预览缩放、整图裁切与重排版、保护蒙版、多候选选择和版本保留。
 - 名称优先检索：同时查询 TVmaze 与已配置的 TMDB，汇总海报候选；选图后下载到本机、自动匹配横竖输出规格并直接进入编辑。个人凭据只存本机。
 
 应用代码位于 `app`；`runtime`、`data`、`models` 是安装根目录下独立目录，不进入源码仓库。此源码仓库不附带模型、用户海报或离线安装二进制。
@@ -35,6 +36,7 @@ py -3.13 -m venv .venv
 ```powershell
 py -3.13 -m pip install packaging
 py -3.13 -m pip download --only-binary=:all: --no-deps --platform win_amd64 --python-version 313 --implementation cp --abi cp313 -r offline\requirements-win313.lock -d offline\wheels
+py -3.13 app\scripts\prepare_ai_sources.py
 py -3.13 app\scripts\build_offline.py
 py -3.13 app\scripts\package_release.py
 ```
@@ -49,7 +51,7 @@ cd app
 ..\.venv\Scripts\python.exe -m pytest -q
 ```
 
-基线 15 项后端测试通过，核心模型 CPU 基础推理验证通过。Windows 安装、浏览器交互、4090 与 PR/ME 共存尚待实机验收；自动候选选择及修补结果需要人工检查。
+Windows 后端与浏览器交互已通过 CI，三套嵌入式 AI 环境通过实际模块导入检查。完整包首次离线安装、4090 模型推理与 PR/ME 共存仍需实机验收；修补结果需要人工检查。完整依赖包由 `.github/workflows/v04-validation.yml` 组装与发布，源码包不含运行时二进制。
 
 ## 素材与许可
 

@@ -39,9 +39,15 @@ def generate(request,rgb,mask):
         add_tokens(tokenizer=pipe.tokenizer,text_encoder=pipe.text_encoder_brushnet,
             placeholder_tokens=['P_ctxt','P_shape','P_obj'],initialize_tokens=['a','a','a'],num_vectors_per_token=10)
         load_model(pipe.brushnet,str(folder/'PowerPaint_Brushnet/diffusion_pytorch_model.safetensors'))
-        pipe.text_encoder_brushnet.load_state_dict(torch.load(folder/'PowerPaint_Brushnet/pytorch_model.bin',map_location='cpu',weights_only=True),strict=True)
+        incompatible=pipe.text_encoder_brushnet.load_state_dict(torch.load(folder/'PowerPaint_Brushnet/pytorch_model.bin',map_location='cpu',weights_only=True),strict=False)
+        allowed={'text_model.embeddings.position_ids'}
+        if set(incompatible.missing_keys)-allowed or set(incompatible.unexpected_keys)-allowed:
+            raise ValueError('PowerPaint text encoder checkpoint does not match the bundled architecture')
         pipe.scheduler=UniPCMultistepScheduler.from_config(pipe.scheduler.config)
-        pipe.enable_model_cpu_offload()
+        # The upstream offload sequence omits the extra BrushNet text encoder.
+        # Keep all components on one device for the target 24 GB workstation.
+        pipe.to('cuda',dtype=torch.float16)
+        pipe.enable_vae_slicing()
     results=[]
     for i in range(p.get('candidates',2)):
         generator=torch.Generator('cuda').manual_seed((p.get('seed',0)+i)%2**32)

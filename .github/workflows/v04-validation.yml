@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   application:
     runs-on: windows-latest
@@ -42,8 +43,47 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-application-candidate
-          path: ../PosterNormalizer_V0.4.0-dev_Windows_Offline.*
+          path: dist/PosterNormalizer_V0.4.0-rc1_Windows_Offline.*
           retention-days: 7
+  full-release:
+    needs: application
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: v04-rc1-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-application-candidate
+          path: dist
+      - name: Download validated Windows AI environments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for profile in modern powerpaint anytext; do
+            gh run download 35213880737 --name "offline-ai-$profile" --dir "offline-ai/$profile"
+          done
+      - name: Assemble full package with verified runtime parts
+        run: python app/scripts/package_full.py
+      - name: Publish complete candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.4.0-rc1 >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace a published package.'
+            exit 1
+          fi
+          gh release create v0.4.0-rc1 --target "$GITHUB_SHA" --draft --prerelease --title 'Poster Normalizer V0.4.0 RC1 · 完整离线依赖包' --notes-file docs/RELEASE_V0.4.0-rc1.md
+          gh release upload v0.4.0-rc1 dist-full/*
+          gh release edit v0.4.0-rc1 --draft=false
   ai-runtimes:
     # Rebuild large packs on explicit dispatch. The first validated packs are retained separately.
     if: github.event_name == 'workflow_dispatch'

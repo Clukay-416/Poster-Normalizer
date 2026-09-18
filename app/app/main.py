@@ -136,7 +136,7 @@ def create_app(data_path=None, run_worker=True):
         if thread:
             thread.join(timeout=10)
 
-    app = FastAPI(title='海报规范化工作台', version='0.4.0-dev', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='海报规范化工作台', version='0.4.0-rc1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
     app.state.codes = codes
     app.state.jobs_root = jobs_root
@@ -199,7 +199,7 @@ def create_app(data_path=None, run_worker=True):
 
     @app.get('/api/health')
     def health():
-        return {'application':'poster-normalizer','version':'0.4.0-dev','ready':True}
+        return {'application':'poster-normalizer','version':'0.4.0-rc1','ready':True}
 
     @app.post('/api/login')
     def login(body: Login, request: Request, response: Response):

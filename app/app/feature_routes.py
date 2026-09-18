@@ -34,7 +34,7 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
 
     @app.put('/api/models/root')
     def root(body:dict,user=Depends(admin)):
-        if store.has_busy():
+        if store.has_busy() or ai.cuda.lock.locked():
             raise HTTPException(409,'请先暂停所选排队任务，并等待运行任务完成后再切换目录')
         try:
             ai.unload();models.change_root(body.get('path',''))
@@ -87,7 +87,7 @@ def register_features(app,data,store,models,ai,member,admin,get_job,public,norma
             providers=ort.get_available_providers()
         except ImportError:
             providers=[]
-        return {'version':'0.4.0-dev','python':sys.version,'system':platform.platform(),
+        return {'version':'0.4.0-rc1','python':sys.version,'system':platform.platform(),
                 'install_root':str(INSTALL_ROOT),'app_root':str(APP_ROOT),'data_root':str(data),
                 'model_root':str(models.root),'onnx_providers':providers,'free_bytes':shutil.disk_usage(data).free,
                 'inference_network':'禁止：模型推理仅使用本地文件','models_separate':not models.root.is_relative_to(APP_ROOT),

@@ -10,6 +10,8 @@ offline/*
 !offline/ai-*.in
 offline-ai/
 runtime-ai/
+dist/
+dist-full/
 app/ai_vendor/
 *.zip
 *.exe
